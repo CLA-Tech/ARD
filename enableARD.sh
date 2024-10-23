@@ -2,15 +2,16 @@
 
 # Enable Apple Remote Desktop and configure system settings
 
-# Usage: ./enable_ard_full.sh username
+# Usage: ./enable_ard_full.sh username password
 
-# Check if a username is provided
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 username"
+# Check if a username and password are provided
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 username password"
     exit 1
 fi
 
 USERNAME="$1"
+PASSWORD="$2"
 
 # Function to check macOS version
 check_macos_version() {
@@ -20,6 +21,30 @@ check_macos_version() {
 
 # Path to the kickstart utility
 KICKSTART="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
+
+# Check if user exists, if not, create the user
+if id "$USERNAME" &>/dev/null; then
+    echo "User '$USERNAME' exists."
+else
+    echo "User '$USERNAME' does not exist. Creating user..."
+
+    # Generate a unique User ID (UID)
+    LASTID=$(dscl . -list /Users UniqueID | awk '{print $2}' | sort -n | tail -1)
+    UNIQUEID=$((LASTID + 1))
+
+    # Create the user
+    sudo dscl . -create /Users/"$USERNAME"
+    sudo dscl . -create /Users/"$USERNAME" UserShell /bin/bash
+    sudo dscl . -create /Users/"$USERNAME" RealName "$USERNAME"
+    sudo dscl . -create /Users/"$USERNAME" UniqueID "$UNIQUEID"
+    sudo dscl . -create /Users/"$USERNAME" PrimaryGroupID 20
+    sudo dscl . -create /Users/"$USERNAME" NFSHomeDirectory /Users/"$USERNAME"
+    echo "$PASSWORD" | sudo dscl . -passwd /Users/"$USERNAME" -
+    sudo createhomedir -c -u "$USERNAME" &> /dev/null
+
+    # Uncomment the following line to make the new user an admin
+    # sudo dscl . -append /Groups/admin GroupMembership "$USERNAME"
+fi
 
 # Enable Remote Apple Events
 echo -e "\nEnabling Remote Apple Events..."
